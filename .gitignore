@@ -1,0 +1,14 @@
+mlruns/
+aimira/data/images/
+results/
+aimira_generators/
+*.xlsx
+*.ipynb
+*.mha
+*.mhd
+*.nii.gz
+
+*.pyc
+*.db
+*.spv
+*.sav
