@@ -30,7 +30,7 @@ import torch
 import torch.nn as nn
 from medutils import medutils
 from medutils.medutils import count_parameters
-from mlflow import log_metric, log_metrics, log_param, log_params
+# from mlflow import log_metric, log_metrics, log_param, log_params
 from mlflow.tracking import MlflowClient
 from monai.utils import set_determinism
 from typing import List, Sequence
@@ -45,21 +45,31 @@ from torchsummary import summary
 from sklearn.metrics import confusion_matrix, roc_curve, auc, f1_score, average_precision_score
 
 from aimira.modules.compute_metrics import icc, metrics
-from aimira.modules.dataset import all_loaders
+from aimira.modules.datasets import all_loaders
 from aimira.modules.loss import get_loss
+from aimira.modules.networks import get_net_3d
 from aimira.modules.path import aimira_Path
 from aimira.modules.set_args import get_args
 from aimira.modules.tools import record_1st, dec_record_cgpu, retrive_run, try_func, int2str, txtprocess, log_all_metrics, process_dict
-from aimira.modules.clip_model import ModelClip
 
 args = get_args()
 global_lock = threading.Lock()
 
 
-log_metric = try_func(log_metric)
-log_metrics = try_func(log_metrics)
+# log_metric = try_func(log_metric)
+# log_metrics = try_func(log_metrics)
 
 
+def log_metric(k, v, idx):
+    print(k, ' : ', v, ' at ', idx)
+    
+
+def log_param(k, v):
+    print(k, ' : ', v)
+    
+def log_params(dt):
+    print(dt)
+    
 class Run_aimira:
     """A class which has its dataloader and step_iteration. It is like Lighting. 
     """
@@ -69,12 +79,12 @@ class Run_aimira:
         
         self.device = torch.device("cuda")  # 'cuda'
         self.target = [i.lstrip() for i in args.target.split('-')]
-        self.mypath = aimira_Path(args.id, check_id_dir=False)
-        self.net = 
+        self.mypath = aimira_Path(args.id, check_id_dir=False, space=args.ct_sp)
+        self.net = get_net_3d(name=args.net, nb_cls=len(self.target))  # receive ct and pcd as input
         print('net:', self.net)
 
         if dataloader_flag:
-            self.data_dt_all = all_loaders(self.mypath.data_dir, self.mypath.label_fpath_ori, self.mypath.label_all_fpath, args, nb=1000)
+            self.data_dt_all = all_loaders(self.mypath.data_dir, self.mypath.label_fpath, args, nb=1000)
             
         self.fold = args.fold
         self.flops_done = False
@@ -117,7 +127,9 @@ class Run_aimira:
         monitor_dt = {'loss_accu': 0,
                       'mae_accu_ls': [0 for _ in self.target],
                       'mae_accu_all': 0}
-
+        # loss_accu = 0
+        # mae_accu_ls = [0 for _ in self.target]
+        # mae_accu_all = 0 
         for batch_dt_ori in dataloader_all:
             torch.cuda.empty_cache()  # avoid memory leak
 
@@ -327,10 +339,10 @@ def fixed_seed(SEED):
         
 
 def main():
-    fixed_seed(seed=4)
+    fixed_seed(SEED=4)
 
-    mlflow.set_tracking_uri("http://nodelogin02:5000")
-    experiment = mlflow.set_experiment('AIMIRA')
+    # mlflow.set_tracking_uri("http://nodelogin02:5000")
+    # experiment = mlflow.set_experiment('AIMIRA')
     
     RECORD_FPATH = f"{Path(__file__).absolute().parent}/results/record.log"
     # write super parameters from set_args.py to record file.
@@ -341,7 +353,7 @@ def main():
         args.fold = 'all'
         tmp_args_dt = vars(args)
         current_id = id
-        log_params(tmp_args_dt)
+        # log_params(tmp_args_dt)
 
         all_folds_id_ls = []
         for fold in [4,3,2,1]:
@@ -354,7 +366,7 @@ def main():
                 log_params(tmp_args_dt)
                 run(args)
                 
-        log_all_metrics(all_folds_id_ls, current_id, experiment)
+        # log_all_metrics(all_folds_id_ls, current_id, experiment)
 
 if __name__ == "__main__":
     main()
