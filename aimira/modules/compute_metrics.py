@@ -112,19 +112,8 @@ def metrics(pred_fpath, label_fpath, ignore_1st_column=False, xy_same_max=True):
     else:
         raise Exception(f"the columns number is greater than 20: {df_label.columns}")
 
-    # 将第一列放到第三列，保持其他列不变，把FVC调整到第三列去
-    
-    # print(df_label.columns[0]) 
-    # if df_label.columns[0]!='pat_id':
-    #     cols_names.insert(2, cols_names.pop(0))
-    # else:
-    #     cols_names.insert(3, cols_names.pop(1))
-    df_pred = df_pred.rename(columns={'DLCOc_SB': 'DLCO', 'FEV1': r'$\mathrm{FEV}_1$', 'TLC_He': 'TLC'})  
-    df_label = df_label.rename(columns={'DLCOc_SB': 'DLCO', 'FEV1': r'$\mathrm{FEV}_1$', 'TLC_He': 'TLC'})  
     print(df_pred.columns.tolist(),'yyaayy')
-    # cols_names = df_pred.columns.tolist()
-    # df_pred = df_pred[cols_names]
-    # df_label = df_label[cols_names]  
+
     
     for plot_id, column in enumerate(df_label.columns):
         if column=='pat_id':
@@ -137,96 +126,7 @@ def metrics(pred_fpath, label_fpath, ignore_1st_column=False, xy_same_max=True):
         ax_2 = fig_2.add_subplot(row_nb, col_nb, plot_id + 1)
         # ax_3 = fig_3.add_subplot(row_nb, col_nb, plot_id + 1)
         
-        
-        # predicting interval
-        # import scipy.stats as stats
-        # n = len(pred)                        # number of samples
-        # m = 2                             # number of parameters
-        # dof = n - m                       # degrees of freedom
-        # t = stats.t.ppf(0.975, dof)       # Students statistic of interval confidence
-        # std_error = (np.sum(residual**2) / dof)**.5   # Standard deviation of the error
-        # residual = pred - label
-
-        # # to plot the adjusted model
-        # x_line = np.linspace(np.min(label), np.max(label), 100)
-        # y_line = np.polyval([slope, intercept], x_line)
-
-        # pi = t * std_error * (1 + 1/n + (x_line - x_mean)**2 / np.sum((x - x_mean)**2))**.5  
-        # ax_2.fill_between(x_line, y_line + pi, y_line - pi, color = 'gray', alpha=.1, label = '95% prediction interval')
-
-        
-        # model = api.OLS(endog = pred, exog = label)
-        # results = model.fit()
-        # df = pd.DataFrame({'label': label.flatten(), 'pred': pred.flatten()})
-
-        # predictions = results.get_prediction(df)
-        # predictions.summary_frame(alpha=0.05)
-        
-        # ax_2.fill_between(df['temperature'], predictions['obs_ci_lower'], predictions['obs_ci_upper'], alpha=.1, label='Prediction interval')
-        # ax_2.fill_between(df['temperature'], predictions['mean_ci_lower'], predictions['mean_ci_upper'], alpha=.5, label='Confidence interval')
-
-        #Get two-tailed t-values:
-        #Significance level:
-        # sl = 0.05
-        # (t_minus, t_plus) = stats.t.interval(alpha = (1.0 - sl), df =  len(results.resid) - len(x0) )
-        # y_value_at_x0 = np.dot(results.params, x0)
-        # lower_bound = y_value_at_x0 + t_minus*np.sqrt(results.mse_resid*( np.dot(np.dot(x0.T,results.normalized_cov_params),x0) ))
-        # upper_bound = y_value_at_x0 +  t_plus*np.sqrt(results.mse_resid*( np.dot(np.dot(x0.T,results.normalized_cov_params),x0) ))
-
-        if False:
-            # from tsmoothie.smoother import *
-            # # generate intervals
-            # # operate smoothing
-            # smoother = PolynomialSmoother(degree=1)
-            # smoother.smooth(data)
-            # low_pi, up_pi = smoother.get_intervals('prediction_interval', confidence=0.05)
-            # plt.fill_between(range(len(smoother.data[0])), low_pi[0], up_pi[0], alpha=0.3, color='blue')
-            
-            # 添加常数项到 x
-            X = api.add_constant(pred)
-            # 执行线性回归
-            model = api.OLS(label, X)
-            results = model.fit()
-            # 计算预测区间
-            x_line = np.linspace(np.min(label), np.max(label), 100)
-            X_new = api.add_constant(x_line)
-            dt = results.get_prediction(X_new).summary_frame(alpha = 0.05)
-            y_prd = dt['mean']
-            yprd_ci_lower = dt['obs_ci_lower']
-            yprd_ci_upper = dt['obs_ci_upper']
-            
-            # predicted_intervals = predictions.conf_int(alpha=0.05)  # 95% 预测区间
-            # 绘制预测区间
-            _ = ax_2.plot(x_line, yprd_ci_lower, color = "blue", linestyle = "--")
-            _ = ax_2.plot(x_line, yprd_ci_upper, color = "blue", linestyle = "--")
-
-
-            # ax_2.fill_between(X_new[:, 1], predicted_intervals[:, 0], predicted_intervals[:, 1], color='r', alpha=0.1, label='95% Prediction Interval')
-                
-
-
-            # # Prediction Interval
-            # slope, intercept = np.polyfit(label.flatten(), pred.flatten(), 1)  # linear model adjustment
-
-            # x_line = np.linspace(np.min(label), np.max(label), 100)
-            # y_line = np.polyval([slope, intercept], x_line)
-
-            # n = label.shape[0]
-            # m = 2                             # number of parameters
-            # dof = n - m                       # degrees of freedom
-            # t = stats.t.ppf(0.95, dof)       # Students statistic of interval confidence
-            # # slope, intercept = np.polyfit(label.flatten(), pred.flatten(), 1)  # linear model adjustment
-            # # y_model = slope * x_line + intercept   # modeling...
-            # residual = label - y_line
-            # res_mean = np.mean(residual)
-            # std_error = (np.sum((residual - res_mean )**2) / dof)**.5   # Standard deviation of the error
-            # pi = t * std_error * np.sqrt(1 + 1/n + (x_line  - np.mean(label))**2 / np.sum((label - np.mean(label))**2))  
-            # ax_2.fill_between(x_line, y_line - pi, y_line + pi, color = 'lightcyan', label = '95% prediction interval')
-
-            # # ax_2.fill_between(x_line, y_model + pi, y_model - pi, color="None", linestyle="--")
-            # ax_2.plot(x_line, y_model - pi, "--", color="0.5")
-            # ax_2.plot(x_line, y_model + pi, "--", color="0.5")
-
+       
 
         # f, ax = plt.subplots(1, figsize=(8, 5))
         scatter_kwds = {'c': colors[plot_id], 'label': column, 's': 8}
@@ -258,13 +158,6 @@ def metrics(pred_fpath, label_fpath, ignore_1st_column=False, xy_same_max=True):
         print(column, 'linear regression m, b:', m, b)
         print(column, 'linear regression m, b, r^2:', slope, intercept, r_value ** 2)
 
-        # ax_2.plot(x_reference, m * x_reference + b, '--', color='gray')  # light gray
-        # ax_2.text(0.1, 0.7, '---  Regression line',
-        #           ha="left", fontsize='large', transform=ax_2.transAxes)
-        # ax_2.text(0.1, 0.7, f'y = {m:.2f}x + {b:.2f}\nR = {r_value: .2f}\nR\N{SUPERSCRIPT TWO} = {r_value ** 2: .2f}',
-        #           ha="left", fontsize='large', transform=ax_2.transAxes)
-
-
         if p_value < 0.001:
             p_txt = 'p < 0.001'
         elif p_value < 0.01:
@@ -278,53 +171,18 @@ def metrics(pred_fpath, label_fpath, ignore_1st_column=False, xy_same_max=True):
                   ha="left", fontsize='large', transform=ax_2.transAxes)
 
         min_xy = min(np.min(label), np.min(pred))
-        # max_xy = max(np.max(label), np.max(pred))
-
         max_xy = int(max(np.max(label), np.max(pred))) + 1
-        if 'DLCO' in column:
-            max_xy = 13
-        elif 'FEV' in column:
-            max_xy = 6
-        elif 'FVC' in column:
-            max_xy = 8
-        elif 'TLC' in column:
-            max_xy = 11
+
         
-        ax_2.plot([0, max_xy*1.2], [0, max_xy*1.2], '--', color = 'gray')
+        ax_2.plot([min_xy*1.2, max_xy*1.2], [0, max_xy*1.2], '--', color = 'gray')
         
-        ax_2.set_xlim(0, max_xy*1.1)
-        ax_2.set_ylim(0, max_xy*1.1)
+        ax_2.set_xlim(min_xy*1.1, max_xy*1.1)
+        ax_2.set_ylim(min_xy*1.1, max_xy*1.1)
         
         # 生成自定义的刻度
         step = 2 if max_xy > 8 else 1
         ticks = list(range(0, max_xy, step))
 
-        # 设置x轴和y轴的刻度
-        # ax.set_xticks(ticks)
-        # ax.set_yticks(ticks)
-        # ax.set_ylim(0, 2)
-    #     if column in ['DLCOc', 'DLCOc_SB']:
-    #         mre = 0.1
-    #     elif column=='FEV1':
-    #         mre = 0.06
-    #     elif column=='FVC':
-    #         mre = 0.05
-    #     elif column in ['TLC', 'TLC_He']:
-    #         mre = 0.1
-    #     else:
-    #         mre = 0
-            
-    #     if mre:
-        
-    #   # The above code is plotting two dashed lines on a graph using the `plot` function from the `matplotlib` library.
-    #   # The lines are plotted on the `ax_2` axis object. The first line is plotted between the minimum and maximum values
-    #   # of the `label` array, with the y-coordinates calculated as `min_lb * (1-mre)` and `max_lb * (1-mre)`. The second
-    #   # line is also plotted between the minimum and maximum values of the `label` array, with the y-coordinates
-    #   # calculated as `min_lb * (1+mre)` and `
-    #         min_lb = np.min(label)
-    #         max_lb = np.max(label)
-    #         ax_2.plot([min_lb, max_lb], [min_lb * (1-mre), max_lb * (1-mre)], '--', color = 'gray')
-    #         ax_2.plot([min_lb, max_lb], [min_lb * (1+mre), max_lb * (1+mre)], '--', color = 'gray')
 
 
         lower_y, upper_y = ax.get_ybound()  # set these plots as the same scale for comparison
@@ -347,64 +205,6 @@ def metrics(pred_fpath, label_fpath, ignore_1st_column=False, xy_same_max=True):
         print(f"std for {column} is {std}")
         print("Finish plot of ", column)
 
-    # for plot_id, column in enumerate(df_label.columns):
-    #     label = df_label[column].to_numpy().reshape(-1, )
-    #     pred = df_pred[column].to_numpy().reshape(-1, )
-    #     ax_3 = fig_3.add_subplot(row_nb, col_nb, plot_id + 1)
-    #     ax_3 = sns.regplot(x=label, y=pred, color=colors[plot_id])
-
-
-    # for plot_id, column in enumerate(df_label.columns):
-    #     label = df_label[column].to_numpy().reshape(-1, )
-    #     pred = df_pred[column].to_numpy().reshape(-1, )
-
-    #     ax_2 = fig_2.add_subplot(row_nb, col_nb, plot_id + 1)
-
-    #     # plot linear regression line
-    #     m, b = np.polyfit(label, pred, 1)
-    #     slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(label, pred)
-    #     r_dict['r_' + prefix + '_' + column] = r_value
-    #     p_dict['p_of_r' + prefix + '_' + column] = p_value
-
-    #     x_reference = np.array([np.min(label), np.max(label)])
-    #     print(column, 'linear regression m, b:', m, b)
-    #     print(column, 'linear regression m, b, r^2:', slope, intercept, r_value ** 2)
-
-    #     ax_2.plot(x_reference, m * x_reference + b, '--', color='gray')  # light gray
-    #     # ax_2.text(0.1, 0.7, '---  Regression line',
-    #     #           ha="left", fontsize='large', transform=ax_2.transAxes)
-    #     ax_2.text(0.1, 0.7, f'y = {m:.2f}x + {b:.2f}\nR = {r_value: .2f}\nR\N{SUPERSCRIPT TWO} = {r_value ** 2: .2f}',
-    #               ha="left", fontsize='large', transform=ax_2.transAxes)
-    # print(f"lower_y_ls: {lower_y_ls}, upper_y_ls: {upper_y_ls}")
-    # lower_y, upper_y = min(lower_y_ls), max(upper_y_ls)
-    # lower_x, upper_x = min(lower_x_ls), max(upper_x_ls)
-
-    # print("lower:", lower_y, "upper:", upper_y)
-    # common_y = max(abs(lower_y), abs(upper_y))
-    # common_x = max(abs(lower_x), abs(upper_x))
-
-    # for i in range(row_nb * col_nb):
-    #     if df_label.columns[i] == 'DLCO_SB':
-    #         limitx = 15  # max value of FVC
-    #     elif df_label.columns[i] == 'TLC_He':
-    #         limitx = 12
-    #     else:
-    #         limitx = 7  # max value of FEV1 and DLCO_SB
-    #     limitx = None
-
-    #     ax = fig.add_subplot(row_nb, col_nb, i + 1)
-    #     # ax.set_xlim(0, limitx)
-    #     # # ax.set_ylim(-common_y * 1.2, common_y * 1.2)
-
-    #     ax_2 = fig_2.add_subplot(row_nb, col_nb, i + 1)
-        # ax_2.set_xlim(0, limitx)
-    #     # ax_2.set_ylim(0, limitx)
-
-    #     ax_3 = fig_3.add_subplot(row_nb, col_nb, i + 1)
-    #     # ax_3.set_xlim(0, limitx)
-    #     # ax_3.set_ylim(0, limitx)
-
-    # f.suptitle(prefix.capitalize() + " Bland-Altman Plot", fontsize=26)
     f.tight_layout()
     f.savefig(basename + '/' + prefix + '_bland_altman.png')
     plt.close(f)
@@ -414,9 +214,6 @@ def metrics(pred_fpath, label_fpath, ignore_1st_column=False, xy_same_max=True):
     f_2.savefig(basename + '/' + prefix + '_scatter.png')
     plt.close(f_2)
 
-    # fig_3.tight_layout()
-    # fig_3.savefig(basename + '/' + prefix + '_scatter_ci.png')
-    # plt.close(fig_3)
 
     all_dt = {**r_dict, **p_dict}
     return all_dt

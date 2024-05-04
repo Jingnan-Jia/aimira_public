@@ -45,12 +45,12 @@ from torchsummary import summary
 from sklearn.metrics import confusion_matrix, roc_curve, auc, f1_score, average_precision_score
 
 from aimira.modules.compute_metrics import icc, metrics
-from aimira.modules.datasets import all_loaders
+from aimira.modules.dataset import all_loaders
 from aimira.modules.loss import get_loss
-from aimira.modules.networks import get_net_3d
 from aimira.modules.path import aimira_Path
 from aimira.modules.set_args import get_args
 from aimira.modules.tools import record_1st, dec_record_cgpu, retrive_run, try_func, int2str, txtprocess, log_all_metrics, process_dict
+from aimira.modules.clip_model import ModelClip
 
 args = get_args()
 global_lock = threading.Lock()
@@ -79,12 +79,12 @@ class Run_aimira:
         
         self.device = torch.device("cuda")  # 'cuda'
         self.target = [i.lstrip() for i in args.target.split('-')]
-        self.mypath = aimira_Path(args.id, check_id_dir=False, space=args.ct_sp)
-        self.net = get_net_3d(name=args.net, nb_cls=len(self.target))  # receive ct and pcd as input
+        self.mypath = aimira_Path(args.id, check_id_dir=False)
+        self.net = ModelClip(group_num=2, group_cap=7, out_ch=1, width=2, dimension=2, extra_fc=args.extra_fc)
         print('net:', self.net)
 
         if dataloader_flag:
-            self.data_dt_all = all_loaders(self.mypath.data_dir, self.mypath.label_fpath, args, nb=1000)
+            self.data_dt_all = all_loaders(self.mypath.img_dir, self.mypath.label_ori_fpath, self.mypath.label_all_fpath, args, nb=1000)
             
         self.fold = args.fold
         self.flops_done = False
@@ -100,7 +100,61 @@ class Run_aimira:
 
         validMAEEpoch_AllBest = 1000
         args.pretrained_id = str(args.pretrained_id)
+        if args.pretrained_id:
+            if 'esmira' in args.pretrained_id:
+                model_fpath = self.mypath.data_dir_root + "/" + args.pretrained_id
+                ckpt = torch.load(model_fpath, map_location=self.device)
+                print(f"model is loaded arom {model_fpath}")
+            else:
+                if '-' in args.pretrained_id:
+                    pretrained_ids = args.pretrained_id.split('-')
+                    args.pretrained_id = pretrained_ids[self.fold-1]
 
+                pretrained_path = aimira_Path(args.pretrained_id, check_id_dir=False)
+                ckpt = torch.load(pretrained_path.model_fpath, map_location=self.device)
+                print(f"model is loaded arom {pretrained_path.model_fpath}")
+
+            # if type(ckpt) is dict and 'model' in ckpt:
+            #     model = ckpt['model']
+            #     # if 'metric_name' in ckpt:  # not applicable if the pre-trained model is from ModelNet40
+            #     #     if 'validMAEEpoch_AllBest' == ckpt['metric_name']:
+            #     #         validMAEEpoch_AllBest = ckpt['current_metric_value']
+            #     client = mlflow.MlflowClient()
+            #     experiment = mlflow.get_experiment_by_name("lung_fun_db15")
+            #     pre_run =  client.search_runs(experiment_ids=[experiment.experiment_id], filter_string=f"params.id = '{str(args.pretrained_id)}'")[0]
+            #     if ('dataset' in pre_run.data.params) and (pre_run.data.params['dataset'] in ['modelnet40']):   # pre-trained by an classification dataset
+            #         assert pre_run.data.params['net'] == self.args.net
+            #         if 'pointmlp_reg' == self.args.net:
+            #             model = {k:v for k,v in model.items() if 'classifier' != k.split('.')[0]}
+            #         elif 'pointnet2_reg' == self.args.net:
+            #             # model = {k:v for k,v in model.items() if 'fc1' in k }
+            #             excluded_keys = ['fc1', 'bn1', 'drop1', 'fc2', 'bn2', 'drop2', 'fc3']  # FC layers
+            #             model = {key: value for key, value in model.items() if all(excluded_key not in key for excluded_key in excluded_keys)}
+            # else:
+            #     model = ckpt
+            # model_fpath need to exist
+            # strict=false due to the calculation of FLOPs and params. In addition, the pre-trained model may be a 
+            # classification model with different output nodes
+            self.net.load_state_dict(ckpt, strict=False)  
+            
+            # freeze part model
+            if 'encoder' in args.freeze:                
+                for param in self.net.encoder_class.parameters():
+                    param.requires_grad = False
+            if 'decoder' in args.freeze:                
+                for param in self.net.decoder.parameters():
+                    param.requires_grad = False
+                    
+                   
+            for module in self.net.decoder.modules():
+                if isinstance(module, nn.Conv2d) or isinstance(module, nn.Linear):
+                    torch.nn.init.kaiming_normal_(module.weight)
+                    if module.bias is not None:
+                        torch.nn.init.constant_(module.bias, 0)
+            # move the new initialized layers to GPU
+            self.net = self.net.to(self.device)
+            
+                
         self.BestMetricDt = {'trainLossEpochBest': 1000,
                              # 'trainnoaugLossEpochBest': 1000,
                              'validLossEpochBest': 1000,
@@ -144,53 +198,54 @@ class Run_aimira:
                 log_param('net_params_M', str(round(params/1e6, 2)))
                 
             tt0 = time.time()
-            with torch.cuda.amp.autocast():
-                if mode != 'train' or save_pred:  # save pred for inference
-                    with torch.no_grad():
-                        pred = self.net(batch_x)
-                else:
+            # with torch.cuda.amp.autocast():
+            if mode != 'train' or save_pred:  # save pred for inference
+                with torch.no_grad():
                     pred = self.net(batch_x)
-                print('pred', pred)
+            else:
+                pred = self.net(batch_x)
+            print('pred', pred)
+            print('label', batch_y)
+            
+            tt1 = time.time()
+            # print(f'time forward: , {tt1-tt0: .2f}')
+
+            if save_pred:
+                for k in batch_dt_ori:
+                    if 'pat_id' in k:
+                        key_pat_id = k    
+                        break                        
                 
-                tt1 = time.time()
-                print(f'time forward: , {tt1-tt0: .2f}')
+                head = ['pat_id']
+                head.extend(self.target)
 
-                if save_pred:
-                    for k in batch_dt_ori:
-                        if 'pat_id' in k:
-                            key_pat_id = k    
-                            break                        
-                   
-                    head = ['pat_id']
-                    head.extend(self.target)
+                batch_pat_id = batch_dt_ori['TENR'].cpu( ).detach().numpy().reshape((-1,1))  # shape (N,1)
+                batch_pat_id = int2str(batch_pat_id)  # shape (N,1)
 
-                    batch_pat_id = batch_dt_ori[key_pat_id].cpu( ).detach().numpy()  # shape (N,1)
-                    batch_pat_id = int2str(batch_pat_id)  # shape (N,1)
+                batch_y_np = batch_y.cpu().detach().numpy()  # shape (N, out_nb)
+                pred_np = pred.cpu().detach().numpy()  # shape (N, out_nb)
+                saved_label = np.hstack((batch_pat_id, batch_y_np))
+                saved_pred = np.hstack((batch_pat_id, pred_np))
 
-                    batch_y_np = batch_y.cpu().detach().numpy()  # shape (N, out_nb)
-                    pred_np = pred.cpu().detach().numpy()  # shape (N, out_nb)
-                    saved_label = np.hstack((batch_pat_id, batch_y_np))
-                    saved_pred = np.hstack((batch_pat_id, pred_np))
-
-                    pred_fpath = self.mypath.save_pred_fpath(mode)
-                    label_fpath = self.mypath.save_label_fpath(mode)
-                        
-                    medutils.appendrows_to(label_fpath, saved_label, head=head)
-                    medutils.appendrows_to(pred_fpath, saved_pred, head=head)
-    
-                loss = self.loss_fun(pred, batch_y)          
-                
-                with torch.no_grad():                
-                    mae_ls = [loss_fun_mae(pred[:, i], batch_y[:, i]).item() for i in range(len(self.target))]
-                    mae_all = loss_fun_mae(pred, batch_y).item()
+                pred_fpath = self.mypath.save_pred_fpath(mode)
+                label_fpath = self.mypath.save_label_fpath(mode)
                     
-            if mode == 'train' and save_pred is not True:  # update gradients only when training
-                self.opt.zero_grad()
-                scaler.scale(loss).backward()
-                scaler.step(self.opt)
-                scaler.update()
+                medutils.appendrows_to(label_fpath, saved_label, head=head)
+                medutils.appendrows_to(pred_fpath, saved_pred, head=head)
+
+            loss = self.loss_fun(pred, batch_y)          
+            
+            with torch.no_grad():                
+                mae_ls = [loss_fun_mae(pred[:, i], batch_y[:, i]).item() for i in range(len(self.target))]
+                mae_all = loss_fun_mae(pred, batch_y).item()
+                    
+            # if mode == 'train' and save_pred is not True:  # update gradients only when training
+            #     self.opt.zero_grad()
+            #     scaler.scale(loss).backward()
+            #     scaler.step(self.opt)
+            #     scaler.update()
             tt2 = time.time()
-            print(f'time backward: , {tt2-tt1: .2f}')
+            # print(f'time backward: , {tt2-tt1: .2f}')
             loss_cpu = loss.item()
             print('loss:', loss_cpu)
 
@@ -267,7 +322,7 @@ def remove_ops(state_dict):
             
             
 @dec_record_cgpu(args.outfile)
-def run(args: Namespace, all_data_dt: dict):
+def run(args: Namespace):
     """
     Run the whole  experiment using this args.
     """
@@ -304,27 +359,27 @@ def run(args: Namespace, all_data_dt: dict):
                 for mode in modes:
                     myrun.step(mode, i, save_pred=True)
 
-        mypath = aimira_Path(args.id, check_id_dir=False, space=args.ct_sp)
-        label_ls = [mypath.save_label_fpath(mode) for mode in modes]
-        pred_ls = [mypath.save_pred_fpath(mode) for mode in modes]
+    mypath = aimira_Path(args.id, check_id_dir=False)
+    label_ls = [mypath.save_label_fpath(mode) for mode in modes]
+    pred_ls = [mypath.save_pred_fpath(mode) for mode in modes]
 
-        for pred_fpath, label_fpath in zip(pred_ls, label_ls):
-            r_p_value = metrics(pred_fpath, label_fpath, ignore_1st_column=True)
-            r_p_value = txtprocess(r_p_value)
-            log_params(r_p_value)
-            print('r_p_value:', r_p_value)
+    for pred_fpath, label_fpath in zip(pred_ls, label_ls):
+        r_p_value = metrics(pred_fpath, label_fpath, ignore_1st_column=True)
+        r_p_value = txtprocess(r_p_value)
+        log_params(r_p_value)
+        print('r_p_value:', r_p_value)
 
-            icc_value = icc(label_fpath, pred_fpath, ignore_1st_column=True)
-            log_params(icc_value)
-            print('icc:', icc_value)
-            if os.path.exists(os.path.dirname(pred_fpath) + '/valid_scatter.png'):
-                os.rename(os.path.dirname(pred_fpath) + '/valid_scatter.png', os.path.dirname(pred_fpath) + f'/valid_scatter_{i}.png')
-                
-            if os.path.exists(os.path.dirname(pred_fpath) + '/test_scatter.png'):
-                os.rename(os.path.dirname(pred_fpath) + '/test_scatter.png', os.path.dirname(pred_fpath) + f'/test_scatter_{i}.png')
-                
-            # add classification metrics
-            # metrics_cls_dt = metrics_cls(label_fpath, pred_fpath, threshold_baseline=-3.07)
+        icc_value = icc(label_fpath, pred_fpath, ignore_1st_column=True)
+        log_params(icc_value)
+        print('icc:', icc_value)
+        if os.path.exists(os.path.dirname(pred_fpath) + '/valid_scatter.png'):
+            os.rename(os.path.dirname(pred_fpath) + '/valid_scatter.png', os.path.dirname(pred_fpath) + f'/valid_scatter_{i}.png')
+            
+        if os.path.exists(os.path.dirname(pred_fpath) + '/test_scatter.png'):
+            os.rename(os.path.dirname(pred_fpath) + '/test_scatter.png', os.path.dirname(pred_fpath) + f'/test_scatter_{i}.png')
+            
+        # add classification metrics
+        # metrics_cls_dt = metrics_cls(label_fpath, pred_fpath, threshold_baseline=-3.07)
 
 
     print('Finish all things!')
@@ -356,7 +411,7 @@ def main():
         # log_params(tmp_args_dt)
 
         all_folds_id_ls = []
-        for fold in [4,3,2,1]:
+        for fold in range(1, args.total_folds+1):
             id = record_1st(RECORD_FPATH)
             all_folds_id_ls.append(id)
             with mlflow.start_run(run_name=str(id) + '_fold_' + str(fold), tags={"mlflow.note.content": f"fold: {fold}"}, nested=True):

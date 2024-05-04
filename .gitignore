@@ -12,3 +12,9 @@ aimira_generators/
 *.db
 *.spv
 *.sav
+*.model
+*.jpg
+*.png
+*.pkl
+*.doc
+*.docx

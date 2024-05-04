@@ -4,18 +4,18 @@ from typing import Union
 from abc import ABC
 
 class aimira_Path():
-    """
-    
+    """    
     Common path values are initialized.
     """
-    project_dir = "/home/jjia/exports/lkeb-hpc/jjia/project/aimira/aimira"  
+    project_dir = "/exports/lkeb-hpc/jjia/project/project/aimira/aimira"  
     results_dir: str = project_dir + '/scripts/results'
     record_file = os.path.join(results_dir, "records.csv")
     log_dir = os.path.join(results_dir, 'logs')
     ex_dir = os.path.join(results_dir, 'experiments')
     data_dir_root = project_dir + '/data'
-    label_fpath_ori = data_dir_root + "/TE_scores_MRI_serieel_nieuw.xlsx"    
-    label_all_fpath =  project_dir + "/scripts/pat_id_with_scores1.csv"
+    img_dir = data_dir_root + '/images'
+    label_ori_fpath = data_dir_root + "/TE_scores_MRI_serieel_nieuw.xlsx"    
+    label_all_fpath =  data_dir_root + "/pat_id_with_scores2_yanli_gt_slice.csv"  # pat_id_with_scores1
 
 
     for directory in [results_dir, log_dir, ex_dir]:

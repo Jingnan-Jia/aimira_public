@@ -26,6 +26,7 @@ sys.path.append("../..")
 from torch.utils.data import WeightedRandomSampler
 from monai.transforms import RandomizableTransform
 from aimira.modules.trans import Label_fusiond, Input_fusiond, CastToTyped, ToTensord
+from monai import transforms
 # import streamlit as st
 
 
@@ -95,25 +96,39 @@ def xformd(mode, args):
     xforms = []
     
 
-    xforms.extend([LoadDatad(position_codes=position_codes), 
+    xforms.extend([LoadDatad(position_codes=position_codes, data_image_dir = args.data_image_dir), 
                             # AddChanneld(keys=keys),
                             ])
 
     # if len(inputmodes):
-    xforms.extend([RemoveTextd(keys=['SCANdatum']), 
+    xforms.extend([
                    ToTensord(dtype=torch.float)])
-    xforms.append(CastToTyped(dtype=torch.float))
+    # xforms.append()
     xforms.extend([   # it is moved to collect_fun because graph cannot be converted to tensor
-                    
                     Input_fusiond(args.input_position_code, args.nb_slices),
-                    Label_fusiond(args.target, args.input_position_code)
+                    Label_fusiond(args.target, args.input_position_code),  # label_fusiond should be in front of Inut_fusiond
+                    RemoveTextd(keys=None), 
+                    CastToTyped(dtype=torch.float)
                     # RemoveDuplicatedd(keys = ['label', 'pat_id']
                                       ])
-    
+    if mode == 'train':
+        img_keys = ['input']
+        xforms.extend([
+                        # transforms.RandGaussianNoise(0.2, 0, 0.1),
+                        transforms.RandFlipd(keys=img_keys, prob=0.5, spatial_axis=0),
+                        transforms.RandRotated(keys=img_keys,range_x=(10), prob=0.5),
+                        transforms.RandAffined(keys=img_keys,prob=1.0, translate_range=(20, 20)),
+                        # transforms.RandShiftIntensity(offsets=0.1, safe=True, prob=0.2),
+                        # transforms.RandStdShiftIntensity(factors=0.1, prob=0.2),
+                        # transforms.RandBiasField(degree=2, coeff_range=(0, 0.1), prob=0.2),
+                        # transforms.RandAdjustContrast(prob=0.5, gamma=(0.9, 1.1)),
+                        transforms.RandHistogramShiftd(keys=img_keys,num_control_points=10, prob=0.2),
+                        transforms.RandZoomd(keys=img_keys,prob=0.3, min_zoom=0.9, max_zoom=1.0, keep_size=True)
+                        ]),
+           
     xforms = rearrange_transforms(xforms)
     transform = monai.transforms.Compose(xforms)
     return transform
-
 
 def filter_data(data_dir, df):
 
@@ -206,8 +221,6 @@ def collate_fn(batch):  # batch_dt is a list of dicts
 
 def all_loaders(data_dir, label_fpath, filename, args, datasetmode=('train', 'valid', 'test'), nb=None):
 
-    # filename = f"/home/jjia/exports/lkeb-hpc/jjia/project/aimira/aimira/scripts/pat_id_with_scores1.csv"
-
     # 检查文件是否存在
     if not os.path.exists(filename):
         # 如果文件不存在，创建一个新文件并写入内容
@@ -251,7 +264,7 @@ def all_loaders(data_dir, label_fpath, filename, args, datasetmode=('train', 'va
     if nb:
         tr_data, vd_data, ts_data = tr_data[:nb], vd_data[:nb], ts_data[:nb]
 
-
+    args.data_image_dir = os.path.dirname(label_fpath) + '/images'  # in xformd we need it
     data_dt = {}
     if 'train' in datasetmode:
         tr_dataset = monai.data.CacheDataset(data=tr_data, transform=xformd('train', args), num_workers=0, cache_rate=1)

@@ -2,13 +2,14 @@ import os
 import random
 from typing import Dict, Optional, Union, Hashable, Sequence
 
-from medutils.medutils import load_itk
+from medutils.medutils import load_itk, save_itk
 import glob
 import numpy as np
 import pandas as pd
 import torch
 from monai.transforms import MapTransform
 # from torchvision.transforms import RandomHorizontalFlip, RandomVerticalFlip, CenterCrop, RandomAffine
+import SimpleITK as sitk
 
 
 
@@ -108,19 +109,28 @@ class Input_fusiond(MapTransform):
     def __call__(self, data: TransInOut) -> TransInOut:
         data['input'] = []
         for position_name in self.input_position_code.split('-'):
-            for view in ['COR', 'TRA']:
-                mid_idx = len(data[f"img_{position_name}_{view}"]) // 2
-                data['input'].append(data[f"img_{position_name}_{view}"][mid_idx - self.nb_slices//2: mid_idx - self.nb_slices//2 + self.nb_slices])
+            for view in [ 'TRA', 'COR']:
+                start2end = data[f"IMG_{position_name}_{view}_slice"]
+                start, end = map(int, start2end.split('to'))
+                data['input'].append(data[f"img_{position_name}_{view}"][start: end])
                 
                 print(f"id: {data['TENR']}, ori_shape: {data[f'img_{position_name}_{view}'].shape}")
                 del data[f'img_{position_name}_{view}']
                 
-        data['input'] = np.concatenate(data['input'], axis=0)
-        
-
+        data['input'] = np.vstack(data['input'])
+   
         return data
 
-
+def normalize_intensity(volume):
+        min_value = volume.min()
+        max_value = volume.max()
+        if max_value > min_value:
+            out = (volume - min_value) / (max_value - min_value)
+        else:
+            out = volume
+        # out_random = np.random.normal(0, 1, size=volume.shape)
+        # out[volume == 0] = out_random[volume == 0]
+        return out
 
 class LoadDatad(MapTransform):
     """Load data. The output image values range from -1500 to 1500.
@@ -136,9 +146,12 @@ class LoadDatad(MapTransform):
         :func:`ssc_scoring.mymodules.composed_trans.xformd_pos`
 
     """
-    def __init__(self, position_codes, *args, **kwargs):
+    def __init__(self, position_codes, data_image_dir):
+        
+ 
+            
         self.position_codes = position_codes
-        self.data_dir = '/home/jjia/exports/lkeb-hpc/jjia/project/aimira/aimira/data'
+        self.data_image_dir = data_image_dir
         self.position_names = []
         code_name_dt = {'WR': 'Wrist',
                         'MC': 'MCP',
@@ -149,8 +162,12 @@ class LoadDatad(MapTransform):
     def __call__(self, data: TransInOut) -> TransInOut:
         for position_name, position_code in zip(self.position_names, self.position_codes):
             for view in ['COR', 'TRA']:
-                fpath = glob.glob(self.data_dir + f"/clean_AIMIRA-LUMC-Treat{data['TENR']:04d}_TRT-*{position_name}_Post{view}*.mha")[0]
-                img = load_itk(fpath)
+                fpath = glob.glob(self.data_image_dir + f"/clean_AIMIRA-LUMC-Treat{data['TENR']:04d}_TRT-*{position_name}_Post{view}*.mha")[0]
+                # img = load_itk(fpath)
+                data_mha = sitk.ReadImage(fpath)
+                data_array = sitk.GetArrayFromImage(data_mha)
+                img = normalize_intensity(data_array)  # [5, 512, 512]
+                # img = normalize_intensity(img)
                 data.update({f"fpath_{position_code}_{view}": fpath,
                             f"img_{position_code}_{view}": img})
   
@@ -172,6 +189,7 @@ class LoadDatad(MapTransform):
         return data
 
 
+    
 # class AddChanneld(MapTransform):
 #     """Add a channel to the first dimension."""
 #     def __init__(self, key='image_key'):
@@ -187,12 +205,13 @@ class RemoveTextd(MapTransform):
     Remove the text to avoid the Error: TypeError: default_collate: batch must contain tensors, numpy arrays, numbers, dicts or lists; found <U80
     """
     def __init__(self, keys):
-        super().__init__(keys, allow_missing_keys=True)
+        pass
+        # super().__init__(keys, allow_missing_keys=True)
 
     def __call__(self, data: TransInOut) -> TransInOut:
         d = data.copy()
         for key in d:
-            if type(d[key]) is str:
+            if type(d[key]) is str:  # 1to8 is okay 
                 del data[key] 
         return data
     
