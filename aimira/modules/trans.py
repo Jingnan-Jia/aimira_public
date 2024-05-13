@@ -86,7 +86,7 @@ class Label_fusiond(MapTransform):
 
     """
     def __init__(self, target, position, *args, **kwargs):
-        self.position = position
+        self.position = position 
         self.target = target
 
     def __call__(self, data: TransInOut) -> TransInOut:
@@ -110,7 +110,7 @@ class Input_fusiond(MapTransform):
         data['input'] = []
         for position_name in self.input_position_code.split('-'):
             for view in [ 'TRA', 'COR']:
-                start2end = data[f"IMG_{position_name}_{view}_slice"]
+                start2end = data[f"{position_name}_{view}_fpath_slice"].split(':')[-1].split('plus')[-1]  # WR_TRA_fpath_slice
                 start, end = map(int, start2end.split('to'))
                 data['input'].append(data[f"img_{position_name}_{view}"][start: end])
                 
@@ -163,6 +163,11 @@ class LoadDatad(MapTransform):
         for position_name, position_code in zip(self.position_names, self.position_codes):
             for view in ['COR', 'TRA']:
                 fpath = glob.glob(self.data_image_dir + f"/clean_AIMIRA-LUMC-Treat{data['TENR']:04d}_TRT-*{position_name}_Post{view}*.mha")[0]
+                # central_selector(fpath)
+                # Target_cent = central_selector(Target_file)  # ':10to15'
+                # Target_file = Target_file+Target_cent
+                # IMG_path[f'IMG_{site}_{dirc}'].append(Target_file)
+
                 # img = load_itk(fpath)
                 data_mha = sitk.ReadImage(fpath)
                 data_array = sitk.GetArrayFromImage(data_mha)
@@ -200,20 +205,20 @@ class LoadDatad(MapTransform):
 #         return data
 
 
-class RemoveTextd(MapTransform):
-    """
-    Remove the text to avoid the Error: TypeError: default_collate: batch must contain tensors, numpy arrays, numbers, dicts or lists; found <U80
-    """
-    def __init__(self, keys):
-        pass
-        # super().__init__(keys, allow_missing_keys=True)
+# class RemoveTextd(MapTransform):
+#     """
+#     Remove the text to avoid the Error: TypeError: default_collate: batch must contain tensors, numpy arrays, numbers, dicts or lists; found <U80
+#     """
+#     def __init__(self, keys):
+#         pass
+#         # super().__init__(keys, allow_missing_keys=True)
 
-    def __call__(self, data: TransInOut) -> TransInOut:
-        d = data.copy()
-        for key in d:
-            if type(d[key]) is str:  # 1to8 is okay 
-                del data[key] 
-        return data
+#     def __call__(self, data: TransInOut) -> TransInOut:
+#         d = data.copy()
+#         for key in d:
+#             if type(d[key]) is str:  # 1to8 is okay 
+#                 del data[key] 
+#         return data
     
     
     
@@ -297,7 +302,8 @@ class CastToTyped(MapTransform):
     def __call__(self, data: Mapping[Hashable, NdarrayOrTensor]) -> dict[Hashable, NdarrayOrTensor]:
         d = dict(data)
         for key, v in d.items(): 
-            d[key] = self.converter(d[key], dtype=self.dtype)
+            if type(v) != str:
+                d[key] = self.converter(d[key], dtype=self.dtype)
 
         return d
 
@@ -336,3 +342,8 @@ class ToTensord(MapTransform):
             d[key] = self.converter(d[key])
         return d
 
+
+if __name__ == '__main__':
+    dataset = LoadDatad(position_codes=['WR'], data_image_dir='/exports/lkeb-hpc/jjia/project/project/aimira/aimira/data/images')
+    a = dataset()
+    print('yes')

@@ -8,8 +8,9 @@ import copy  # not important
 import torch
 from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score
-
-
+import numpy as np
+import pandas as pd
+from medutils.medutils import save_itk
 # train is HIGHLY recommanded to be a seperate function, as well as the train step, so your code could be cleaner
 # train:
 # (1) hyper-parameters: lr, weight_dec, optimizer, criterion(loss function), batch_size
@@ -32,11 +33,14 @@ from sklearn.metrics import accuracy_score
 def train_step(model, optimizer, criterion, train_loader, device = torch.device("cuda" if torch.cuda.is_available() else "cpu")):
     model.train()
     avg_loss = []
-    for x,y in tqdm(train_loader):
+    for x,y, path in tqdm(train_loader):
         x = x.to(device)
         y = y.to(device)
         # print(z)
         y_pred = model(x=x)
+        print('label', y)
+        print('pred', y_pred)
+        print('-next----------')
         loss = criterion(y_pred, y)
         # next three lines are unchanged for all the tasks
         loss.backward()
@@ -47,15 +51,20 @@ def train_step(model, optimizer, criterion, train_loader, device = torch.device(
     return sum(avg_loss)/len(avg_loss)
 
 
-def predict(model, test_loader, device = torch.device("cuda" if torch.cuda.is_available() else "cpu")):
+    
+def predict(model, test_loader, mode='valid', device = torch.device("cuda" if torch.cuda.is_available() else "cpu"), mypath=None, save_results=False):
     model.eval()
     total_preds = torch.Tensor()
     total_labels = torch.Tensor()
-    model.to(torch.device("cpu"))
+    total_paths = []
+    # model.to(torch.device("cpu"))
     with torch.no_grad():
-        for x,y in tqdm(test_loader):
-            # x = x.to(device)
-            # y = y.to(device)
+        for x,y,path in tqdm(test_loader):
+            # path = [i.split('Treat')[-1][:4] for i in path]
+            # save_itk(f"/exports/lkeb-hpc/jjia/project/project/aimira/jinanan_method/{path}_Yanli.mha", x[0].numpy(), [1,1,1], [1,1,1], dtype='float')
+
+            x = x.to(device)
+            y = y.to(device)
             pred = model(x=x)
             print('label', y)
             print('pred', pred)
@@ -64,7 +73,24 @@ def predict(model, test_loader, device = torch.device("cuda" if torch.cuda.is_av
             # y_pred = torch.argmax(pred, dim=1)
             total_preds = torch.cat((total_preds, y_pred.cpu()), 0)
             total_labels = torch.cat((total_labels, y.cpu()), 0)
-    return total_labels.numpy().flatten(),total_preds.numpy().flatten()
+            total_paths += list(path)
+            
+    G = total_labels.numpy().flatten()
+    P = total_preds.numpy().flatten()
+    id = np.array(total_paths)
+    if save_results:
+        # 使用column_stack()函数将这三个数组拼接成一个二维数组
+        id_G = np.column_stack((id, G))
+        id_P = np.column_stack((id, P))
+
+        id_G = pd.DataFrame(id_G, columns=['pat_id', 'score'])
+        id_G.to_csv(mypath.save_label_fpath(mode), index=False)
+
+        id_P = pd.DataFrame(id_P, columns=['pat_id', 'score'])
+        id_P.to_csv(mypath.save_pred_fpath(mode), index=False)
+
+
+    return G, P, id
 
 
 def train(model, dataset, val_dataset, lr=0.001, num_epoch:int=100,

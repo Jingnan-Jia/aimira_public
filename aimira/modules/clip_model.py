@@ -123,13 +123,13 @@ class FC(nn.Module):
     def __init__(self, in_ch = 1, out_ch=1):
         super(FC, self).__init__()
         self.fc = nn.Sequential(
-            nn.Linear(1, 5),
-            nn.LeakyReLU(inplace=True),
-            # nn.Dropout(),
-            nn.Linear(5, 5),
-            nn.LeakyReLU(inplace=True),
-            # nn.Dropout(),
-            nn.Linear(5, out_ch),
+            nn.Linear(1, 1),
+            # nn.LeakyReLU(inplace=True),
+            # # nn.Dropout(),
+            # nn.Linear(5, 5),
+            # nn.LeakyReLU(inplace=True),
+            # # nn.Dropout(),
+            # nn.Linear(5, out_ch),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  

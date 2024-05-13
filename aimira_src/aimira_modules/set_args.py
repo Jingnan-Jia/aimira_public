@@ -23,7 +23,7 @@ def get_args(jupyter=False):
     parser.add_argument('--batch_size', help='batch size', type=int, default=4)
     parser.add_argument('--loss', help='loss', type=str, default='mse')
     parser.add_argument('--target', help='target', choices=['IFM', 'IFM_change'], type=str, default='IFM')  # ifm-bme-tsy-syn -BME-SYN-TSY
-    parser.add_argument('--input_position_code', help='input_position_code', choices=['WR', 'MC', 'MT'], type=str, default='WR')  # ifm-bme-tsy-syn
+    parser.add_argument('--input_position_code', help='input_position_code', choices=['WR', 'MC', 'MT'], type=str, default='MT')  # ifm-bme-tsy-syn
     parser.add_argument('--net', help='network name', choices=['vgg11_3d'], type=str, default='vgg11_3d')  # ifm-bme-tsy-syn
     parser.add_argument('--view_fution', help='method for view fution', choices=['input_concatenation','after_first_conv', 'before_last_conv'], type=str, default='input_concatenation')  # ifm-bme-tsy-syn
     parser.add_argument('--nb_slices', help='nb_slices', type=int, default=7)  # ifm-bme-tsy-syn
@@ -37,7 +37,8 @@ def get_args(jupyter=False):
     # parser.add_argument('--lr', help='lr', type=float, default=1e-4)  # ifm-bme-tsy-syn
     # parser.add_argument('--lr', help='lr', type=float, default=1e-4)  # ifm-bme-tsy-syn
     parser.add_argument('--freeze', help='freeze layer', type=str, choices=['encoder', 'encoder_decoder'], default='encoder_decoder')  # ifm-bme-tsy-syn
-    parser.add_argument('--extra_fc', help='extra_fc layer', type=bool, default=True)  # ifm-bme-tsy-syn
+    parser.add_argument('--extra_fc', help='extra_fc layer', type=bool, default=False)  # 
+    parser.add_argument('--contrast', help='score change or not', type=bool, default=True)  # 
 
 
     # others

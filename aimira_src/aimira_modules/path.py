@@ -7,15 +7,15 @@ class aimira_Path():
     """    
     Common path values are initialized.
     """
-    project_dir = "/exports/lkeb-hpc/jjia/project/project/aimira/aimira"  
+    project_dir = "/exports/lkeb-hpc/jjia/project/project/aimira/aimira_src"  
     results_dir: str = project_dir + '/scripts/results'
     record_file = os.path.join(results_dir, "records.csv")
     log_dir = os.path.join(results_dir, 'logs')
     ex_dir = os.path.join(results_dir, 'experiments')
-    data_dir_root = project_dir + '/data'
-    img_dir = data_dir_root + '/images'
-    label_ori_fpath = data_dir_root + "/TE_TreatmentResponse_cleanforJingnan_2.xlsx"    # TE_TreatmentResponse_cleanforJingnan_2.xlsx, TE_scores_MRI_serieel_nieuw.xlsx
-    label_all_fpath =  data_dir_root + "/pat_id_with_scores2_yanli_gt_slice.csv"  # pat_id_with_scores1
+    data_dir_root = project_dir.replace('aimira_src', 'aimira') + '/data'
+    img_dir = data_dir_root + '/TRT_ori'
+    label_ori_fpath = data_dir_root + "/TE_scores_MRI_serieel_nieuw.xlsx"    
+    # label_all_fpath =  data_dir_root + "/pat_id_with_scores2_yanli_gt_slice.csv"  # pat_id_with_scores1
 
 
     for directory in [results_dir, log_dir, ex_dir]:

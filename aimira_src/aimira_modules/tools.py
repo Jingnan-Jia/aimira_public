@@ -38,7 +38,7 @@ from filelock import FileLock
 from pathlib import Path
 import psutil
 from mlflow import log_metric, log_metrics, log_param, start_run, end_run, log_params, log_artifact
-from aimira.modules.compute_metrics import icc, metrics
+from aimira_src.aimira_modules.compute_metrics import icc, metrics
 
 def try_func(func):
     def _try_fun(*args, **kwargs):
@@ -140,7 +140,7 @@ def log_metrics_all_folds_average(id_ls: list, id: int, experiment):
 def ensemble_4folds_testing(fold_ex_dt, parent_dir = '/home/jjia/data/lung_function/lung_function/scripts/results/experiments/'):
     
 
-    dir0 = parent_dir + str(fold_ex_dt[0])
+    dir0 = parent_dir + str(fold_ex_dt['all'])
     ave_fpath = dir0  + '/test_pred.csv'
     label_fpath = dir0  + '/test_label.csv'
 
@@ -148,7 +148,7 @@ def ensemble_4folds_testing(fold_ex_dt, parent_dir = '/home/jjia/data/lung_funct
     output_file_path.parent.mkdir(parents=True, exist_ok=True)
     
     df_ls = []
-    for i in range(1, len(fold_ex_dt)):
+    for i in range(len(fold_ex_dt)-1):
         data_fpath_ls = glob(parent_dir + str(fold_ex_dt[i]) + '/test_pred*.csv')
         for data_fpath in data_fpath_ls:
             df = pd.read_csv(data_fpath,index_col=0)
@@ -169,14 +169,14 @@ def ensemble_4folds_validation(fold_ex_dt_ls, parent_dir = '/home/jjia/data/lung
     if type(fold_ex_dt_ls) is not list:
         fold_ex_dt_ls = [fold_ex_dt_ls]
     for fold_ex_dt in fold_ex_dt_ls:
-        dir0 = parent_dir + str(fold_ex_dt[0])
+        dir0 = parent_dir + str(fold_ex_dt['all'])
         pred_all_fpath = dir0  + '/valid_pred.csv'
         label_all_fpath = dir0  + '/valid_label.csv'
         output_file_path = Path(pred_all_fpath)
         output_file_path.parent.mkdir(parents=True, exist_ok=True)
         
         df_pred_ls, df_label_ls = [], []
-        for i in range(1, len(fold_ex_dt)):
+        for i in range(len(fold_ex_dt)-1):
             
             df_ls = []
             data_fpath_ls = glob(parent_dir + str(fold_ex_dt[i]) + '/valid_pred*.csv')
@@ -813,26 +813,23 @@ def record_artifacts(outfile):
         print(f"No output file, no log artifacts")
         return None
     
-def log_all_metrics(all_folds_id_ls, current_id, experiment, modes=['valid', 'test'], 
-                    parent_dir= '/home/jjia/data/lung_function/lung_function/scripts/results/experiments/'):
+def log_all_metrics(all_folds_id_ls, current_id, experiment, modes, parent_dir= '/home/jjia/data/lung_function/lung_function/scripts/results/experiments/'):
     # log_metrics_all_folds_average(all_folds_id_ls, current_id, experiment)
-    
-
-    folds_ls = list(range(1, len(all_folds_id_ls)+1))
-    fold_ex_dt = {0: current_id}    
+    folds_ls = list(range(len(all_folds_id_ls)))
+    fold_ex_dt = {'all': current_id}
     for fold in folds_ls:
-        fold_ex_dt.update({fold: all_folds_id_ls[fold-1]})                     
-
+        fold_ex_dt.update({fold: all_folds_id_ls[fold]})
+                      
     if 'test' in modes:
         ensemble_4folds_testing(fold_ex_dt, parent_dir=parent_dir)  
-
     if 'valid' in modes:
         ensemble_4folds_validation(fold_ex_dt, parent_dir=parent_dir)
-        
 
-    for mode in modes:        
-        label_fpath = parent_dir + str(fold_ex_dt[0]) + f'/{mode}_label.csv'
-        pred_fpath = parent_dir + str(fold_ex_dt[0]) + f'/{mode}_pred.csv'
+    for mode in modes:
+        
+    
+        label_fpath = parent_dir + str(fold_ex_dt['all']) + f'/{mode}_label.csv'
+        pred_fpath = parent_dir + str(fold_ex_dt['all']) + f'/{mode}_pred.csv'
         
         # add icc
         icc_value = icc(label_fpath, pred_fpath, ignore_1st_column=True)

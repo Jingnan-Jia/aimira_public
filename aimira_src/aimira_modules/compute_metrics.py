@@ -25,7 +25,7 @@ import pandas as pd
 import scipy
 from sklearn.metrics import cohen_kappa_score
 
-from aimira.modules import my_bland
+from aimira_src.aimira_modules import my_bland
 
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use('Agg')
@@ -112,7 +112,7 @@ def metrics(pred_fpath, label_fpath, ignore_1st_column=False, xy_same_max=True):
     else:
         raise Exception(f"the columns number is greater than 20: {df_label.columns}")
 
-    print(df_pred.columns.tolist(),'yyaayy')
+    # print(df_pred.columns.tolist(),'yyaayy')
 
     
     for plot_id, column in enumerate(df_label.columns):
@@ -174,7 +174,7 @@ def metrics(pred_fpath, label_fpath, ignore_1st_column=False, xy_same_max=True):
         max_xy = int(max(np.max(label), np.max(pred))) + 1
 
         
-        # ax_2.plot([min_xy*1.1, max_xy*1.1], [min_xy*1.1, max_xy*1.1], '--', color = 'gray')
+        ax_2.plot([min_xy*1.2, max_xy*1.2], [0, max_xy*1.2], '--', color = 'gray')
         
         ax_2.set_xlim(min_xy*1.1, max_xy*1.1)
         ax_2.set_ylim(min_xy*1.1, max_xy*1.1)
@@ -203,15 +203,17 @@ def metrics(pred_fpath, label_fpath, ignore_1st_column=False, xy_same_max=True):
         print(f"std_mae for {column} is {std_mae}")
         print(f"mean for {column} is {mean}")
         print(f"std for {column} is {std}")
-        print("Finish plot of ", column)
+        # print("Finish plot of ", column)
 
     f.tight_layout()
     f.savefig(basename + '/' + prefix + '_bland_altman.png')
+    print(f"save bland-alterman plot at {basename + '/' + prefix + '_bland_altman.png'}")
     plt.close(f)
 
     # f_2.suptitle(prefix.capitalize() + " Prediction Scatter Plot", fontsize=26)
     f_2.tight_layout()
     f_2.savefig(basename + '/' + prefix + '_scatter.png')
+    print(f"save scatter plot at {basename + '/' + prefix + '_scatter.png'}")
     plt.close(f_2)
 
 

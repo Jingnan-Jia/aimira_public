@@ -6,7 +6,7 @@
 
 import sys
 import os
-
+from medutils.medutils import save_itk
 # 获取当前文件的路径
 current_file_path = os.path.abspath(__file__)
 
@@ -114,27 +114,6 @@ class Run_aimira:
                 ckpt = torch.load(pretrained_path.model_fpath, map_location=self.device)
                 print(f"model is loaded arom {pretrained_path.model_fpath}")
 
-            # if type(ckpt) is dict and 'model' in ckpt:
-            #     model = ckpt['model']
-            #     # if 'metric_name' in ckpt:  # not applicable if the pre-trained model is from ModelNet40
-            #     #     if 'validMAEEpoch_AllBest' == ckpt['metric_name']:
-            #     #         validMAEEpoch_AllBest = ckpt['current_metric_value']
-            #     client = mlflow.MlflowClient()
-            #     experiment = mlflow.get_experiment_by_name("lung_fun_db15")
-            #     pre_run =  client.search_runs(experiment_ids=[experiment.experiment_id], filter_string=f"params.id = '{str(args.pretrained_id)}'")[0]
-            #     if ('dataset' in pre_run.data.params) and (pre_run.data.params['dataset'] in ['modelnet40']):   # pre-trained by an classification dataset
-            #         assert pre_run.data.params['net'] == self.args.net
-            #         if 'pointmlp_reg' == self.args.net:
-            #             model = {k:v for k,v in model.items() if 'classifier' != k.split('.')[0]}
-            #         elif 'pointnet2_reg' == self.args.net:
-            #             # model = {k:v for k,v in model.items() if 'fc1' in k }
-            #             excluded_keys = ['fc1', 'bn1', 'drop1', 'fc2', 'bn2', 'drop2', 'fc3']  # FC layers
-            #             model = {key: value for key, value in model.items() if all(excluded_key not in key for excluded_key in excluded_keys)}
-            # else:
-            #     model = ckpt
-            # model_fpath need to exist
-            # strict=false due to the calculation of FLOPs and params. In addition, the pre-trained model may be a 
-            # classification model with different output nodes
             self.net.load_state_dict(ckpt, strict=False)  
             
             # freeze part model
@@ -144,13 +123,19 @@ class Run_aimira:
             if 'decoder' in args.freeze:                
                 for param in self.net.decoder.parameters():
                     param.requires_grad = False
-                    
-                   
-            for module in self.net.decoder.modules():
-                if isinstance(module, nn.Conv2d) or isinstance(module, nn.Linear):
-                    torch.nn.init.kaiming_normal_(module.weight)
-                    if module.bias is not None:
-                        torch.nn.init.constant_(module.bias, 0)
+
+            if args.extra_fc:
+                with torch.no_grad():
+
+                    self.net.extra_fc_layer.fc[0].weight.fill_(-0.6)
+                    self.net.extra_fc_layer.fc[0].bias.fill_(2.1)
+                    self.net.extra_fc_layer.fc[0].requires_grad = False
+                
+            # for module in self.net.decoder.modules():
+            #     if isinstance(module, nn.Conv2d) or isinstance(module, nn.Linear):
+            #         torch.nn.init.kaiming_normal_(module.weight)
+            #         if module.bias is not None:
+            #             torch.nn.init.constant_(module.bias, 0)
             # move the new initialized layers to GPU
             self.net = self.net.to(self.device)
             
@@ -186,6 +171,8 @@ class Run_aimira:
         # mae_accu_all = 0 
         for batch_dt_ori in dataloader_all:
             torch.cuda.empty_cache()  # avoid memory leak
+            # for idx, i in enumerate(batch_dt_ori['fpath_WR_COR']):
+            #     save_itk(f"/exports/lkeb-hpc/jjia/project/project/aimira/jinanan_method/{i.split('Treat')[-1][:4]}_jingnan.mha", batch_dt_ori['input'][idx].numpy(), [1,1,1], [1,1,1], dtype='float')
 
             # label
             batch_y = batch_dt_ori['label'].to(self.device)
@@ -239,11 +226,11 @@ class Run_aimira:
                 mae_ls = [loss_fun_mae(pred[:, i], batch_y[:, i]).item() for i in range(len(self.target))]
                 mae_all = loss_fun_mae(pred, batch_y).item()
                     
-            # if mode == 'train' and save_pred is not True:  # update gradients only when training
-            #     self.opt.zero_grad()
-            #     scaler.scale(loss).backward()
-            #     scaler.step(self.opt)
-            #     scaler.update()
+            if mode == 'train' and save_pred is not True:  # update gradients only when training
+                self.opt.zero_grad()
+                scaler.scale(loss).backward()
+                scaler.step(self.opt)
+                scaler.update()
             tt2 = time.time()
             # print(f'time backward: , {tt2-tt1: .2f}')
             loss_cpu = loss.item()
@@ -397,7 +384,7 @@ def main():
     fixed_seed(SEED=4)
 
     # mlflow.set_tracking_uri("http://nodelogin02:5000")
-    # experiment = mlflow.set_experiment('AIMIRA')
+    experiment = mlflow.set_experiment('AIMIRA')
     
     RECORD_FPATH = f"{Path(__file__).absolute().parent}/results/record.log"
     # write super parameters from set_args.py to record file.
@@ -409,7 +396,8 @@ def main():
         tmp_args_dt = vars(args)
         current_id = id
         # log_params(tmp_args_dt)
-
+        mypath = aimira_Path(args.id, check_id_dir=False)
+        
         all_folds_id_ls = []
         for fold in range(1, args.total_folds+1):
             id = record_1st(RECORD_FPATH)
@@ -421,7 +409,7 @@ def main():
                 log_params(tmp_args_dt)
                 run(args)
                 
-        # log_all_metrics(all_folds_id_ls, current_id, experiment)
+        log_all_metrics(all_folds_id_ls, current_id, experiment, modes=['valid', 'test'], parent_dir = mypath.ex_dir + '/')
 
 if __name__ == "__main__":
     main()
