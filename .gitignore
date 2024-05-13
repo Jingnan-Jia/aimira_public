@@ -3,7 +3,6 @@ aimira/data/images/
 results/
 aimira_generators/
 *.xlsx
-*.ipynb
 *.mha
 *.mhd
 *.nii.gz
@@ -15,6 +14,6 @@ aimira_generators/
 *.model
 *.jpg
 *.png
-*.pkl
+# *.pkl
 *.doc
 *.docx
